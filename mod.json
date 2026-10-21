@@ -5,9 +5,9 @@
     "win": "2.2081",
     "android": "2.2081"
   },
-  "id": "cesar.input-buffer",
-  "name": "Predictive Input Buffer",
+  "id": "z53n1th.auto-deco",
+  "name": "Auto Deco",
   "version": "v0.1.0",
   "developer": "CesarGD96",
-  "description": "F6 cycles through five input buffer stages."
+  "description": "Adds decoration to selected blocks in the editor."
 }
