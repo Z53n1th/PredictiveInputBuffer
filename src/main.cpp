@@ -1,66 +1,58 @@
-
 #include <Geode/Geode.hpp>
-#include <Geode/modify/CCKeyboardDispatcher.hpp>
+#include <Geode/modify/EditorUI.hpp>
+#include <set>
+#include <cmath>
 
 using namespace geode::prelude;
 
-namespace {
-    struct Stage {
-        int allTicks;
-        int waveTicks;
-        bool enabled;
-    };
+class $modify(AutoDecoUI, EditorUI) {
+    bool init(LevelEditorLayer* lel) {
+        if (!EditorUI::init(lel)) return false;
 
-    constexpr Stage stages[] = {
-        {2, 2, true},
-        {4, 4, true},
-        {8, 8, true},
-        {16, 8, true},
-        {0, 0, false}
-    };
+        auto spr = ButtonSprite::create("Deco");
+        spr->setScale(0.7f);
+        auto btn = CCMenuItemSpriteExtra::create(
+            spr, this, menu_selector(AutoDecoUI::onAutoDeco)
+        );
+        btn->setID("auto-deco-button"_spr);
 
-    int currentStage = 0;
+        auto menu = CCMenu::create();
+        menu->setID("auto-deco-menu"_spr);
+        menu->setPosition({0.f, 0.f});
+        menu->addChild(btn);
 
-    void logStage() {
-        auto const& stage = stages[currentStage];
+        auto win = CCDirector::get()->getWinSize();
+        btn->setPosition({win.width * 0.345f, win.height * 0.94f});
 
-        if (!stage.enabled) {
-            log::info("[InputBuffer] Stage 5: OFF (100% Raw Input)");
+        this->addChild(menu, 100);
+        return true;
+    }
+
+    void onAutoDeco(CCObject*) {
+        auto selected = this->getSelectedObjects();
+        if (!selected || selected->count() == 0) {
+            FLAlertLayer::create("Auto Deco", "Select some blocks first.", "OK")->show();
             return;
         }
 
-        log::info(
-            "[InputBuffer] Stage {}: {} Ticks All | {} Ticks Wave",
-            currentStage + 1,
-            stage.allTicks,
-            stage.waveTicks
-        );
-    }
-
-    void nextStage() {
-        currentStage = (currentStage + 1) % 5;
-        logStage();
-    }
-}
-
-class $modify(PredictiveInputBufferKeyboard, CCKeyboardDispatcher) {
-    void dispatchKeyboardMSG(
-        enumKeyCodes key,
-        bool isKeyDown,
-        bool isKeyRepeat,
-        double timestamp
-    ) {
-        if (key == enumKeyCodes::KEY_F6 && isKeyDown && !isKeyRepeat) {
-            nextStage();
+        std::set<std::pair<int, int>> taken;
+        for (auto obj : CCArrayExt<GameObject*>(selected)) {
+            auto p = obj->getPosition();
+            taken.insert({(int)std::round(p.x), (int)std::round(p.y)});
         }
 
-        CCKeyboardDispatcher::dispatchKeyboardMSG(
-            key, isKeyDown, isKeyRepeat, timestamp
-        );
+        int added = 0;
+        for (auto obj : CCArrayExt<GameObject*>(selected)) {
+            auto p = obj->getPosition();
+            int x = (int)std::round(p.x);
+            int y = (int)std::round(p.y);
+            if (taken.count({x, y + 30})) continue;
+            m_editorLayer->createObject(40, {p.x, p.y + 30.f}, true);
+            added++;
+        }
+
+        FLAlertLayer::create(
+            "Auto Deco", fmt::format("Added {} objects.", added), "OK"
+        )->show();
     }
 };
-
-$on_mod(Loaded) {
-    log::info("[InputBuffer] Prototype loaded. Press F6 to cycle stages.");
-    logStage();
-}
