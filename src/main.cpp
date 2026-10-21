@@ -6,16 +6,8 @@
 using namespace geode::prelude;
 
 static constexpr int BLACK_CHANNEL = 1010; // GD's built-in Black color
+static constexpr int SOLID_ID = 1;         // plain solid block used as the black fill
 static constexpr float DEPTH = 4.f;        // 3D offset, up and right
-static constexpr float GRID = 30.f;        // one block
-
-static bool hasObjectAt(std::vector<GameObject*> const& objs, CCPoint p) {
-    for (auto o : objs) {
-        auto q = o->getPosition();
-        if (std::abs(q.x - p.x) < 2.f && std::abs(q.y - p.y) < 2.f) return true;
-    }
-    return false;
-}
 
 class $modify(AutoDecoUI, EditorUI) {
     bool init(LevelEditorLayer* lel) {
@@ -40,16 +32,18 @@ class $modify(AutoDecoUI, EditorUI) {
         return true;
     }
 
-    GameObject* makeBlackCopy(GameObject* src, CCPoint pos) {
-        auto copy = m_editorLayer->createObject(src->m_objectID, pos, true);
-        if (!copy) return nullptr;
-        copy->setRotation(src->getRotation());
-        copy->setScaleX(src->getScaleX());
-        copy->setScaleY(src->getScaleY());
-        if (copy->m_baseColor) copy->m_baseColor->m_colorID = BLACK_CHANNEL;
-        if (copy->m_detailColor) copy->m_detailColor->m_colorID = BLACK_CHANNEL;
-        copy->m_zOrder = src->m_zOrder - 1;
-        return copy;
+    GameObject* spawn(int id, GameObject* src, CCPoint pos, bool black, int z) {
+        auto o = m_editorLayer->createObject(id, pos, true);
+        if (!o) return nullptr;
+        o->setRotation(src->getRotation());
+        o->setScaleX(src->getScaleX());
+        o->setScaleY(src->getScaleY());
+        if (black) {
+            if (o->m_baseColor) o->m_baseColor->m_colorID = BLACK_CHANNEL;
+            if (o->m_detailColor) o->m_detailColor->m_colorID = BLACK_CHANNEL;
+        }
+        o->m_zOrder = z;
+        return o;
     }
 
     void onAutoDeco(CCObject*) {
@@ -65,15 +59,14 @@ class $modify(AutoDecoUI, EditorUI) {
         int added = 0;
         for (auto obj : objs) {
             auto p = obj->getPosition();
+            auto shifted = CCPoint{p.x + DEPTH, p.y + DEPTH};
+            int z = obj->m_zOrder;
 
-            // Rule 1: black fill directly under the block
-            if (makeBlackCopy(obj, p)) added++;
-
-            // Rule 2: 3D depth, only on exposed sides (no selected block above and to the right)
-            bool topTaken = hasObjectAt(objs, {p.x, p.y + GRID});
-            bool rightTaken = hasObjectAt(objs, {p.x + GRID, p.y});
-            if (topTaken && rightTaken) continue;
-            if (makeBlackCopy(obj, {p.x + DEPTH, p.y + DEPTH})) added++;
+            // back layer: white outline + black fill, shifted up-right (the 3D sides)
+            if (spawn(obj->m_objectID, obj, shifted, false, z - 4)) added++;
+            if (spawn(SOLID_ID, obj, shifted, true, z - 3)) added++;
+            // front layer: black fill right behind your outline
+            if (spawn(SOLID_ID, obj, p, true, z - 2)) added++;
         }
 
         FLAlertLayer::create(
