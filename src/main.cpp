@@ -1,13 +1,13 @@
 #include <Geode/Geode.hpp>
 #include <Geode/modify/EditorUI.hpp>
 #include <vector>
-#include <set>
+#include <algorithm>
 #include <cmath>
 
 using namespace geode::prelude;
 
 static constexpr int BLACK_CHANNEL = 1010;
-static constexpr int SOLID_ID = 1;
+static constexpr int SOLID_ID = 94; // black solid block
 static constexpr float DEPTH = 4.f;
 
 class $modify(AutoDecoUI, EditorUI) {
@@ -47,11 +47,14 @@ class $modify(AutoDecoUI, EditorUI) {
             FLAlertLayer::create("IDs", "Select something first.", "OK")->show();
             return;
         }
-        std::set<int> ids;
-        for (auto obj : CCArrayExt<GameObject*>(selected)) ids.insert(obj->m_objectID);
+        std::vector<GameObject*> v;
+        for (auto obj : CCArrayExt<GameObject*>(selected)) v.push_back(obj);
+        std::sort(v.begin(), v.end(), [](GameObject* a, GameObject* b) {
+            return a->getPositionX() < b->getPositionX();
+        });
         std::string out;
-        for (int id : ids) out += fmt::format("{}  ", id);
-        FLAlertLayer::create("Object IDs", out, "OK")->show();
+        for (auto o : v) out += fmt::format("{}   ", o->m_objectID);
+        FLAlertLayer::create("IDs (left to right)", out, "OK")->show();
     }
 
     GameObject* spawn(int id, GameObject* src, CCPoint pos, bool black, int z) {
