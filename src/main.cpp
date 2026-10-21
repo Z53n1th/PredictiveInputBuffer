@@ -1,9 +1,21 @@
 #include <Geode/Geode.hpp>
 #include <Geode/modify/EditorUI.hpp>
-#include <set>
+#include <vector>
 #include <cmath>
 
 using namespace geode::prelude;
+
+static constexpr int BLACK_CHANNEL = 1010; // GD's built-in Black color
+static constexpr float DEPTH = 4.f;        // 3D offset, up and right
+static constexpr float GRID = 30.f;        // one block
+
+static bool hasObjectAt(std::vector<GameObject*> const& objs, CCPoint p) {
+    for (auto o : objs) {
+        auto q = o->getPosition();
+        if (std::abs(q.x - p.x) < 2.f && std::abs(q.y - p.y) < 2.f) return true;
+    }
+    return false;
+}
 
 class $modify(AutoDecoUI, EditorUI) {
     bool init(LevelEditorLayer* lel) {
@@ -22,10 +34,22 @@ class $modify(AutoDecoUI, EditorUI) {
         menu->addChild(btn);
 
         auto win = CCDirector::get()->getWinSize();
-        btn->setPosition({win.width * 0.345f, win.height * 0.94f});
+        btn->setPosition({win.width * 0.32f, win.height * 0.94f});
 
         this->addChild(menu, 100);
         return true;
+    }
+
+    GameObject* makeBlackCopy(GameObject* src, CCPoint pos) {
+        auto copy = m_editorLayer->createObject(src->m_objectID, pos, true);
+        if (!copy) return nullptr;
+        copy->setRotation(src->getRotation());
+        copy->setScaleX(src->getScaleX());
+        copy->setScaleY(src->getScaleY());
+        if (copy->m_baseColor) copy->m_baseColor->m_colorID = BLACK_CHANNEL;
+        if (copy->m_detailColor) copy->m_detailColor->m_colorID = BLACK_CHANNEL;
+        copy->m_zOrder = src->m_zOrder - 1;
+        return copy;
     }
 
     void onAutoDeco(CCObject*) {
@@ -35,20 +59,21 @@ class $modify(AutoDecoUI, EditorUI) {
             return;
         }
 
-        std::set<std::pair<int, int>> taken;
-        for (auto obj : CCArrayExt<GameObject*>(selected)) {
-            auto p = obj->getPosition();
-            taken.insert({(int)std::round(p.x), (int)std::round(p.y)});
-        }
+        std::vector<GameObject*> objs;
+        for (auto obj : CCArrayExt<GameObject*>(selected)) objs.push_back(obj);
 
         int added = 0;
-        for (auto obj : CCArrayExt<GameObject*>(selected)) {
+        for (auto obj : objs) {
             auto p = obj->getPosition();
-            int x = (int)std::round(p.x);
-            int y = (int)std::round(p.y);
-            if (taken.count({x, y + 30})) continue;
-            m_editorLayer->createObject(40, {p.x, p.y + 30.f}, true);
-            added++;
+
+            // Rule 1: black fill directly under the block
+            if (makeBlackCopy(obj, p)) added++;
+
+            // Rule 2: 3D depth, only on exposed sides (no selected block above and to the right)
+            bool topTaken = hasObjectAt(objs, {p.x, p.y + GRID});
+            bool rightTaken = hasObjectAt(objs, {p.x + GRID, p.y});
+            if (topTaken && rightTaken) continue;
+            if (makeBlackCopy(obj, {p.x + DEPTH, p.y + DEPTH})) added++;
         }
 
         FLAlertLayer::create(
